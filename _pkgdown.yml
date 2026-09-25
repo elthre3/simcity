@@ -1,4 +1,13 @@
-url: ~
+url: https://joftius.github.io/simcity/
 template:
   bootstrap: 5
 
+reference:
+- title: Simulation
+  contents:
+  - simulate_hdr
+  - instance_hdr
+  - simmary_coefs
+- title: Pipeline components
+  contents:
+  - components
