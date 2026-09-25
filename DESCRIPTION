@@ -1,26 +1,29 @@
 Package: simcity
 Type: Package
-Title: Parallel Simulations For Common Statistical Tasks
-Version: 0.1.0
+Title: Parallel Simulations for Common Statistical Tasks
+Version: 0.2.0
 Authors@R: 
-    person("Joshua", "Loftus", "R", "joftius@gmail.com", role = c("aut", "cre"),
+    person(given = c("Joshua", "R"), family = "Loftus",
+           email = "joftius@gmail.com", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-2905-1632"))
 Description: Simplifies generating simulated data for some common statistical
-    tasks in order to test and compare methods.
+    tasks in order to test and compare methods. Simulations of sparse
+    high-dimensional linear regression are built from replaceable data
+    generation, model fitting, and post-processing steps, and are run in
+    parallel with reproducible random number streams.
 License: MIT + file LICENSE
 Encoding: UTF-8
-LazyData: true
-URL: https://github.com/joftius/simcity
+URL: https://github.com/joftius/simcity, https://joftius.github.io/simcity/
 BugReports: https://github.com/joftius/simcity/issues
+Depends:
+    R (>= 4.1.0)
 Imports: 
-    broom,
+    doParallel,
+    doRNG,
     foreach,
-    generics,
-    iterators,
+    glmnet,
+    hdi,
     parallel,
-    purrr,
-    RPtests,
-    selectiveInference,
     stats
 Suggests: 
     ggplot2,
@@ -28,11 +31,6 @@ Suggests:
     rmarkdown,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3
-Depends: 
-    doParallel,
-    doRNG,
-    glmnet,
-    hdi
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.2.1
+RoxygenNote: 7.3.1
 VignetteBuilder: knitr

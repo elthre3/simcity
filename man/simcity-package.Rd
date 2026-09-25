@@ -4,14 +4,15 @@
 \name{simcity-package}
 \alias{simcity}
 \alias{simcity-package}
-\title{simcity: Parallel Simulations For Common Statistical Tasks}
+\title{simcity: Parallel Simulations for Common Statistical Tasks}
 \description{
-Simplifies generating simulated data for some common statistical tasks in order to test and compare methods.
+Simplifies generating simulated data for some common statistical tasks in order to test and compare methods. Simulations of sparse high-dimensional linear regression are built from replaceable data generation, model fitting, and post-processing steps, and are run in parallel with reproducible random number streams.
 }
 \seealso{
 Useful links:
 \itemize{
   \item \url{https://github.com/joftius/simcity}
+  \item \url{https://joftius.github.io/simcity/}
   \item Report bugs at \url{https://github.com/joftius/simcity/issues}
 }
 
