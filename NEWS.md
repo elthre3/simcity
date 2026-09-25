@@ -1,3 +1,63 @@
+# simcity 0.2.0
+
+## Breaking changes
+
+* Pipeline components have new, documented signatures:
+  `yfun(x, beta, ...)`, `fitfun(x, y, ...)` and
+  `postfun(fit, x, y, beta, ...)`. `yargs`, `fitargs` and `postargs` are now
+  named lists whose elements are passed as separate arguments. For example,
+  `fitargs = list(alpha = 0.5)` calls `fitfun(x, y, alpha = 0.5)`. The
+  fitting function no longer receives the true `beta`.
+* The default components are exported under new names: `y_linear_gaussian()`,
+  `fit_cv_glmnet()` and `post_glmnet_coefs()`. They replace the internal
+  `y_standard_linear()`, `fit_glmnet_cvmin()` and `post_glmnet_cvmin()`. The
+  `lambda` choice is now `postargs = list(s = "lambda.min")`; the default is
+  still `"lambda.1se"`.
+* `simulate_hdr()` forwards `...` to `instance_hdr()` instead of duplicating
+  its arguments. Unknown argument names are an error.
+* `simmary_coefs()` excludes the intercept, which changes the reported
+  numbers (see bug fixes). It gains the columns `iter`, `false_negatives`,
+  `fdp` and `exact_support`.
+* doParallel, doRNG, glmnet and hdi are now imported rather than attached,
+  so call `library()` on them yourself if you use them directly.
+  Requires R >= 4.1.0.
+
+## Bug fixes
+
+* `simmary_coefs()` counted the intercept as a selected variable whenever its
+  estimate was nonzero, which is almost always the case. `estimated_sparsity`
+  and `false_positives` were therefore too large by 1, and `mse` averaged
+  over p + 1 terms including the intercept.
+* `fitargs` was passed positionally to `cv.glmnet()` and `glmnet()`, where it
+  matched the `weights` argument, so any `fitargs` caused an error.
+* `simulate_hdr()` ignored the `x.par` and `permuted` arguments.
+* `simulate_hdr()` left the foreach backend registered to a stopped cluster,
+  breaking later `%dopar%` loops. The cluster also leaked if an iteration
+  failed. With the default `cores`, a single-core machine requested a
+  cluster of 0 workers.
+* `yargs` or `postargs` lists without the expected field silently produced
+  empty results.
+
+## Other changes
+
+* `cores = 1` runs sequentially without starting a cluster. Results for a
+  given `seed` are identical for any number of cores, and a given `seed`
+  leaves the caller's random number state untouched.
+* The default fit no longer runs a second, redundant `glmnet()` path fit and
+  `exact = TRUE` refit. The coefficients are unchanged.
+* New `packages` argument to `simulate_hdr()` for loading packages on
+  workers. The worker-side progress bar was removed; `verbose = TRUE`
+  reports the elapsed time.
+* Input validation with informative error messages.
+* Removed unused dependencies: broom, generics, iterators, purrr, RPtests,
+  selectiveInference.
+* Vignettes build from committed CSV summaries and no longer need to run
+  long simulations or write to a missing directory. Set
+  `SIMCITY_RUN_SIMS=true` to regenerate them. Screening probabilities are
+  shown with Clopper–Pearson intervals.
+* The pkgdown site is now built by GitHub Actions and deployed to the
+  `gh-pages` branch. renv was removed.
+
 # simcity 0.1.0
 
 * Added a `NEWS.md` file to track changes to the package.
