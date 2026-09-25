@@ -1,8 +1,8 @@
 ---
-title: "Speed-up from parallel computation"
+title: "Parallel computation and reproducibility"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Speed-up from parallel computation}
+  %\VignetteIndexEntry{Parallel computation and reproducibility}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
@@ -15,45 +15,77 @@ knitr::opts_chunk$set(
 ```
 
 ```{r setup}
-library(ggplot2)
-theme_set(theme_minimal())
-library(dplyr)
 library(simcity)
 ```
 
+`simulate_hdr()` runs independent replications of `instance_hdr()` with
+`foreach` and `doRNG`. With `cores > 1` it starts a local PSOCK cluster,
+which is stopped again when the function returns.
 
-```{r replicate}
-set.seed(1)
+## Timing
+
+The timings below are from whatever machine built this page, with at most
+2 cores so that the vignette also builds on CRAN-like systems. Treat them as
+an illustration, not a benchmark. Starting worker processes has a fixed cost
+of roughly a second, so parallelism pays off only when each replication or
+the number of replications is large enough.
+
+```{r}
 n <- 100
 p <- 200
 s0 <- 10
-niters <- 100
+niters <- 40
+```
+
+Sequentially, with `replicate()`:
+
+```{r replicate}
+set.seed(1)
 system.time(
-  many_lassos_unparallel <- 
-    replicate(niters, instance_hdr(n, p, s0))
+  many_lassos_unparallel <- replicate(niters, instance_hdr(n, p, s0),
+                                      simplify = FALSE)
 )
 ```
 
-```{r pbreplicate}
-if (require(pbapply)) {
-  system.time(
-  many_lassos_pbunparallel <- 
-    pbreplicate(niters, instance_hdr(n, p, s0))
-  )
-}
-```
+With `simulate_hdr()` on one core (sequential, in this R session) and on two
+cores:
 
-```{r cores2}
+```{r cores}
 system.time(
-  many_lassos_2cores <- 
-    simulate_hdr(niters, n, p, s0, cores = 2)
+  many_lassos_1core <- simulate_hdr(niters, n, p, s0, cores = 1, seed = 1)
+)
+system.time(
+  many_lassos_2cores <- simulate_hdr(niters, n, p, s0, cores = 2, seed = 1)
 )
 ```
 
-```{r cores4}
-system.time(
-  many_lassos_2cores <- 
-    simulate_hdr(niters, n, p, s0, cores = 4)
-)
+On a machine with more cores, `simulate_hdr()` defaults to half of
+`parallel::detectCores()`.
+
+## Reproducibility
+
+Each replication gets its own L'Ecuyer-CMRG random number stream, derived from
+`seed`. So the results depend on `seed` but not on the number of cores:
+
+```{r}
+identical(many_lassos_1core, many_lassos_2cores)
 ```
 
+The seed of each replication is stored in the `"rng"` attribute. This lets
+you rerun a single replication, for example to investigate an unusual
+result:
+
+```{r}
+rng_states <- attr(many_lassos_2cores, "rng")
+assign(".Random.seed", rng_states[[7]], envir = globalenv())
+rerun_7 <- instance_hdr(n, p, s0)
+all.equal(rerun_7, many_lassos_2cores[[7]], check.attributes = FALSE)
+RNGkind("default")
+```
+
+## Custom components on workers
+
+Workers are fresh R processes. Functions you pass as `yfun`, `fitfun` or
+`postfun` are sent to them along with the objects they refer to. Functions
+from other packages should be called with `pkg::fun()`, or the packages
+listed in the `packages` argument, so that they are loaded on each worker.
