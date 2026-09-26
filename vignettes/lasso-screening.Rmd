@@ -7,29 +7,33 @@ vignette: >
   %\VignetteIndexEntry{Lasso screening}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteDepends{ggplot2}
-  %\VignetteDepends{purrr}
   %\VignetteEncoding{UTF-8}
 ---
 
 ```{r, include = FALSE}
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  fig.width = 6,
+  fig.height = 3.5
 )
+# The simulations below take several minutes. By default, the vignette loads
+# precomputed summaries from vignettes/data/. Set the environment variable
+# SIMCITY_RUN_SIMS=true to rerun them and overwrite those files.
+run_sims <- identical(Sys.getenv("SIMCITY_RUN_SIMS"), "true")
 ```
 
 ## Lasso variable selection
 
 In high-dimensional regression with $n$ observations, $p$ predictor variables, and $p > n$, we cannot fit ordinary least squares. One strategy around this is to **bet on sparsity**: we assume there is a true (or good enough) linear model with a relatively small number $s_0 < n$ of nonzero coefficients.
 
-The lasso [-@tibshirani1996] can be used to fit a linear model to high-dimensional data. It typically results in a fit with few nonzero coefficient estimates. The `glmnet` [package](https://cran.r-project.org/web/packages/glmnet/index.html) [-@glmnet] is a standard software implementation that can also use cross-validation to choose the regularization parameter.
+The lasso [-@tibshirani1996] can be used to fit a linear model to high-dimensional data. It typically results in a fit with few nonzero coefficient estimates. The `glmnet` [package](https://cran.r-project.org/package=glmnet) [-@glmnet] is a standard software implementation that can also use cross-validation to choose the regularization parameter.
 
-In this vignette we show how to use `simcity` to simulate many high-dimensional datasets where the true model is a sparse linear model, use the lasso with `glmnet::cv.glmnet` to fit an estimated model, and then check whether the estimated model has a certain property we call **screening**. This means the selected model's support is a superset of the true support, i.e. if selected variables include all the ones with nonzero coefficients in the true model.
+In this vignette we show how to use `simcity` to simulate many high-dimensional datasets where the true model is a sparse linear model. Designs and coefficients follow the reference setups of @rhdi, which earlier versions of simcity generated with `hdi::rXb()`. We fit the lasso with `glmnet::cv.glmnet` at `lambda.1se`, and then check whether the estimated model has a property we call **screening**. Writing $S = \{j : \beta_j \neq 0\}$ and $\hat S = \{j : \hat\beta_j \neq 0\}$, screening means $S \subseteq \hat S$: the selected variables include all the ones with nonzero coefficients in the true model.
 
 ```{r setup}
 library(ggplot2)
 theme_set(theme_minimal())
-library(dplyr)
 library(simcity)
 ```
 
@@ -43,20 +47,21 @@ n <- 50
 p <- 100
 s0 <- 2
 one_lasso_fit <- instance_hdr(n, p, s0)
-one_lasso_fit |> head()
+head(one_lasso_fit)
 ```
 
-Which coefficients are nonzero in the true model?
+The first row is the intercept. Its true value is 0, and it is not penalized or counted as a selected variable. Dropping it, which coefficients are nonzero in the true model? `instance_hdr()` always puts the true support first. With the default `permuted = TRUE`, it instead shuffles the columns of $X$, so the active variables are not neighbours in the Toeplitz correlation structure.
 
 ```{r}
-true_support <- which(one_lasso_fit$true_beta != 0)
+slopes <- one_lasso_fit[one_lasso_fit$term != "(Intercept)", ]
+true_support <- which(slopes$true_beta != 0)
 true_support
 ```
 
 Which coefficients are nonzero in the lasso selected model?
 
 ```{r}
-estimated_support <- which(one_lasso_fit$estimate != 0)
+estimated_support <- which(slopes$estimate != 0)
 estimated_support
 ```
 
@@ -68,7 +73,7 @@ all(true_support %in% estimated_support)
 
 ### Many simulated datasets
 
-We'll use the `simulate_hdr` function, but first we're going to setup simulation parameters and save some computation by optionally saving the resulting data and soo it can be re-loaded later.
+We'll use `simulate_hdr()`, which runs many instances in parallel with reproducible random number streams. `simmary_coefs()` then computes support recovery metrics for each instance.
 
 ```{r}
 n <- 100
@@ -77,139 +82,110 @@ s0 <- 5
 niters <- 100
 ```
 
-```{r}
-sim_results_file <- "./data/lasso-screening.csv"
-# Check whether results already saved
-if (file.exists(sim_results_file)) {
-  sim_summary <- read.csv(sim_results_file)
-  print(paste0(
-    "Loading saved simulation results with ",
-    nrow(sim_summary), " iterates"))
-} else {
-  # run simulation
-  many_lasso_fits <- simulate_hdr(niters, n, p, s0)
-  sim_summary <- simmary_coefs(many_lasso_fits)
-  write.csv(sim_summary, sim_results_file)
-}
+```{r, eval = run_sims}
+many_lasso_fits <- simulate_hdr(niters, n, p, s0, seed = 1)
+sim_summary <- simmary_coefs(many_lasso_fits)
+write.csv(sim_summary, "data/lasso-screening.csv", row.names = FALSE)
 ```
 
 ```{r}
+sim_summary <- read.csv("data/lasso-screening.csv")
 head(sim_summary)
 ```
 
-What was the frequency of screening?
+What was the frequency of screening? With `r niters` independent replications, a binomial confidence interval conveys the Monte Carlo error:
 
 ```{r}
-mean(sim_summary$screened)
+k <- sum(sim_summary$screened)
+k / nrow(sim_summary)
+binom.test(k, nrow(sim_summary))$conf.int
 ```
 
 Was the smallest truly nonzero coefficient different in the cases when screening occurred?
 
 ```{r}
-ggplot(sim_summary, aes(screened, beta_min)) + 
-  geom_boxplot() +
-  theme_minimal()
+ggplot(sim_summary, aes(screened, beta_min)) +
+  geom_boxplot()
 ```
 
 ### Sparsity and screening probability
 
-Let's now compute the rate of screening as a function of the sparsity of the true model, keeping all other parameters fixed.
+Let's now compute the rate of screening as a function of the sparsity of the true model, keeping all other parameters fixed. The helper below collapses the per-instance summaries into one row per sparsity level. It adds a Clopper–Pearson 95% interval for the screening probability and the mean false discovery proportion.
+
+```{r}
+summarize_by_sparsity <- function(full_results) {
+  by_s0 <- split(full_results, full_results$true_sparsity)
+  do.call(rbind, lapply(by_s0, function(d) {
+    k <- sum(d$screened)
+    ci <- binom.test(k, nrow(d))$conf.int
+    data.frame(true_sparsity = d$true_sparsity[1],
+               n_sims = nrow(d),
+               screening = k / nrow(d),
+               lower = ci[1],
+               upper = ci[2],
+               mean_fdp = mean(d$fdp),
+               avg_bmin = mean(d$beta_min))
+  }))
+}
+
+run_sparsity_sims <- function(sparsities, niters, ...) {
+  full_results <- do.call(rbind, lapply(sparsities, function(s0) {
+    simmary_coefs(simulate_hdr(niters, n, p, s0, ..., seed = s0))
+  }))
+  summarize_by_sparsity(full_results)
+}
+```
 
 ```{r}
 n <- 100
 p <- 200
-sparsities <- 1 + 2*0:15
+sparsities <- 1 + 2 * 0:15
 niters <- 200
 ```
 
-
-```{r}
-sim_results_file <- "./data/lasso-screening-sparsity.csv"
-# Check whether results already saved
-if (file.exists(sim_results_file)) {
-  sim_summary <- read.csv(sim_results_file)
-  print(paste0(
-    "Loading saved simulation results with ",
-    nrow(sim_summary), " rows"))
-} else {
-  # run simulation
-  time_start <- Sys.time()
-  full_results <- purrr::map_dfr(sparsities,
-              function(s0) {
-                many_fits <- simulate_hdr(niters, n, p, s0)
-                sim_summary <- simmary_coefs(many_fits)
-                sim_summary
-              })
-  sim_summary <- full_results |>
-    group_by(true_sparsity) |>
-    summarize(screening = mean(screened),
-              avg_bmin = mean(beta_min))
-  time_end <- Sys.time()
-  print(time_end - time_start)
-  write.csv(sim_summary, sim_results_file)
-}
+```{r, eval = run_sims}
+sim_summary <- run_sparsity_sims(sparsities, niters, verbose = TRUE)
+write.csv(sim_summary, "data/lasso-screening-sparsity.csv", row.names = FALSE)
 ```
 
 ```{r sparsity-plot1}
-sim_summary |>
-  ggplot(aes(true_sparsity, screening)) +
+sim_summary <- read.csv("data/lasso-screening-sparsity.csv")
+ggplot(sim_summary, aes(true_sparsity, screening)) +
   geom_col(aes(fill = avg_bmin)) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.4) +
   scale_fill_viridis_c(direction = -1)
 ```
 
-We can see that the frequency of screening decreases as the true sparsity increases. But also, the true coefficients are (by default) drawn from a uniform distribution $U[-2, 2]$. So we can see that the average (over simulation instances) minimum coefficient, `avg_bmin`, is also decreasing.
+The frequency of screening decreases as the true sparsity increases. But the true coefficients are, by default, drawn from a uniform distribution $U[-2, 2]$. So the average (over simulation instances) minimum coefficient, `avg_bmin`, also decreases with $s_0$: the minimum of $s_0$ i.i.d. $|U[-2,2]|$ draws has expectation $2/(s_0+1)$.
 
-To separate these effects, let's run the simulation again but pass an option to generate all nonzero coefficients as a constant `= 1`.
+To separate these effects, let's run the simulation again with all nonzero coefficients fixed at 1, using `btype = "bfix1"`.
 
 ```{r}
-sparsities <- 9 + 2*0:16
-sim_results_file <- "./data/lasso-screening-sparsity-bfix1.csv"
-# Check whether results already saved
-if (file.exists(sim_results_file)) {
-  sim_bfix_summary <- read.csv(sim_results_file)
-  print(paste0(
-    "Loading saved simulation results with ",
-    nrow(sim_summary), " rows"))
-} else {
-  # run simulation
-  time_start <- Sys.time()
-  full_results <- purrr::map_dfr(sparsities,
-              function(s0) {
-                many_fits <- 
-                  simulate_hdr(niters, n, p, s0,
-                               btype = "bfix1",
-                               cores = detectCores() - 2)
-                sim_summary <- simmary_coefs(many_fits)
-                sim_summary
-              })
-  sim_bfix_summary <- full_results |>
-    group_by(true_sparsity) |>
-    summarize(screening = mean(screened),
-              fpr = mean(false_positives/
-                           pmax(1, estimated_sparsity)),
-              avg_bmin = mean(beta_min))
-  time_end <- Sys.time()
-  print(time_end - time_start)
-  write.csv(sim_bfix_summary, sim_results_file)
-}
+sparsities <- 9 + 2 * 0:16
+```
+
+```{r, eval = run_sims}
+sim_bfix_summary <- run_sparsity_sims(sparsities, niters, btype = "bfix1",
+                                      verbose = TRUE)
+write.csv(sim_bfix_summary, "data/lasso-screening-sparsity-bfix1.csv",
+          row.names = FALSE)
 ```
 
 ```{r sparsity-plot2}
-sim_bfix_summary |>
-  ggplot(aes(true_sparsity, screening)) +
-  geom_col(aes(fill = avg_bmin)) +
-  scale_fill_viridis_c(direction = -1)
+sim_bfix_summary <- read.csv("data/lasso-screening-sparsity-bfix1.csv")
+ggplot(sim_bfix_summary, aes(true_sparsity, screening)) +
+  geom_col(fill = "grey60") +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.4)
 ```
 
-Now all the nonzero true coefficients equal 1 and we can see a much higher screening rate with successful screening at higher sparsity levels. 
+With every nonzero coefficient equal to 1, $\beta_{\min}$ no longer shrinks as $s_0$ grows. Screening remains likely at sparsity levels where it had become rare with uniform coefficients. For example, at $s_0 = 21$ the rate is about 95% here, compared with about 5% above. It still breaks down once $s_0$ is large relative to $n$. This is qualitatively consistent with theory for lasso support recovery, which requires a sample size of order $s_0 \log(p - s_0)$ [@wainwright2009]. Here $n / \log p \approx 100 / 5.3 \approx 19$, which matches where screening starts to decline, but only up to constants. That theory concerns exact recovery with a deterministic $\lambda$, whereas screening with a cross-validated $\lambda$ is a weaker property, so the comparison is only heuristic.
 
 ### Other metrics
 
-Lasso screening is just one example. This package can be used to compare various performance metrics, fitting procedures, and other kinds of simulated data and tasks. As a brief example, we show here one other metric from the above simulated data, the **false positive rate** or proportion of variables selected by lasso which have coefficients of zero in the true model.
+Lasso screening is just one example. This package can be used to compare various performance metrics, fitting procedures, and other kinds of simulated data and tasks. As a brief example, here is one other metric from the simulations above: the **false discovery proportion** (FDP). The FDP is the fraction of selected variables whose true coefficient is zero, $|\hat S \setminus S| / \max(1, |\hat S|)$, and its mean over instances estimates the false discovery rate.
 
-```{r sparsity-plot-fpr}
-sim_bfix_summary |>
-  ggplot(aes(true_sparsity, fpr)) +
+```{r sparsity-plot-fdp}
+ggplot(sim_bfix_summary, aes(true_sparsity, mean_fdp)) +
   geom_col(aes(fill = screening)) +
   scale_fill_viridis_c()
 ```
