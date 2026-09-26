@@ -9,9 +9,11 @@
 #' @details
 #' The pipeline is:
 #'
-#' 1. Generate a design matrix `x` and coefficient vector `beta` with
-#'    [hdi::rXb()]. The support of `beta` is always the first `s0`
-#'    coordinates; `permuted = TRUE` randomly permutes the *columns of `x`*,
+#' 1. Generate a design matrix `x` with i.i.d. \eqn{N_p(0, \Sigma)} rows
+#'    and a coefficient vector `beta`, following the reference designs of
+#'    Dezeure et al. (2015), formerly generated with `hdi::rXb()`. The
+#'    support of `beta` is always the first `s0` coordinates;
+#'    `permuted = TRUE` randomly permutes the *columns of `x`*,
 #'    so that the active variables are not adjacent in the correlation
 #'    structure.
 #' 2. `y <- yfun(x, beta, <yargs>)`
@@ -28,9 +30,16 @@
 #' @param n Sample size, the number of rows of the design matrix.
 #' @param p Number of predictors, the number of columns of the design matrix.
 #' @param s0 Sparsity, the number of nonzero coefficients in the true model.
-#' @param xtype,btype,permuted Design and coefficient generation parameters,
-#'   passed to [hdi::rXb()].
-#' @param x.par Parameter of the design covariance, passed to [hdi::rXb()].
+#' @param xtype Design covariance \eqn{\Sigma}. `"toeplitz"`:
+#'   \eqn{\Sigma_{jk} = \rho^{|j-k|}}. `"equi.corr"`: \eqn{\Sigma_{jk} = \rho}
+#'   for \eqn{j \neq k} with unit diagonal. `"exp.decay"`: \eqn{\Sigma = K^{-1}}
+#'   with \eqn{K_{jk} = a^{|j-k|/b}}.
+#' @param btype Distribution of the nonzero coefficients: `"U[a,b]"` for
+#'   i.i.d. uniform on \eqn{[a, b]}, or `"bfixc"` for all equal to `c`
+#'   (e.g. `"bfix1"`).
+#' @param permuted If `TRUE`, randomly permute the columns of `x`.
+#' @param x.par Parameter of the design covariance: \eqn{\rho} for
+#'   `"toeplitz"` and `"equi.corr"`, `c(a, b)` for `"exp.decay"`.
 #'   `NULL` (default) uses `1/3` for `"toeplitz"`, `1/20` for `"equi.corr"`,
 #'   and `c(0.4, 5)` for `"exp.decay"`.
 #' @param yfun Function `(x, beta, ...)` returning a numeric outcome vector of
@@ -43,6 +52,9 @@
 #'   `fitfun` and `postfun`.
 #' @return Whatever `postfun` returns. With the defaults, a `data.frame` with
 #'   columns `term`, `estimate` and `true_beta` (see [post_glmnet_coefs()]).
+#' @references Dezeure, R., Bühlmann, P., Meier, L. and Meinshausen, N.
+#'   (2015). High-dimensional inference: confidence intervals, p-values and
+#'   R-software hdi. *Statistical Science*, 30(4), 533--558.
 #' @seealso [simulate_hdr()] to repeat this many times in parallel, and
 #'   [simmary_coefs()] to summarize the results.
 #' @export
@@ -78,7 +90,7 @@ instance_hdr <- function(
   check_component(postfun, postargs, "postfun", "postargs")
   if (is.null(x.par)) x.par <- default_x_par(xtype)
 
-  sim_data <- hdi::rXb(n = n, p = p, s0 = s0, xtype = xtype, btype = btype,
+  sim_data <- r_design(n = n, p = p, s0 = s0, xtype = xtype, btype = btype,
                        permuted = permuted, x.par = x.par)
   x <- sim_data$x
   beta <- sim_data$beta

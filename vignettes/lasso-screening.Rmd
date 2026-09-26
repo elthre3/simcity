@@ -29,7 +29,7 @@ In high-dimensional regression with $n$ observations, $p$ predictor variables, a
 
 The lasso [-@tibshirani1996] can be used to fit a linear model to high-dimensional data. It typically results in a fit with few nonzero coefficient estimates. The `glmnet` [package](https://cran.r-project.org/package=glmnet) [-@glmnet] is a standard software implementation that can also use cross-validation to choose the regularization parameter.
 
-In this vignette we show how to use `simcity` to simulate many high-dimensional datasets where the true model is a sparse linear model. Designs and coefficients are generated with `hdi::rXb()` [@rhdi]. We fit the lasso with `glmnet::cv.glmnet` at `lambda.1se`, and then check whether the estimated model has a property we call **screening**. Writing $S = \{j : \beta_j \neq 0\}$ and $\hat S = \{j : \hat\beta_j \neq 0\}$, screening means $S \subseteq \hat S$: the selected variables include all the ones with nonzero coefficients in the true model.
+In this vignette we show how to use `simcity` to simulate many high-dimensional datasets where the true model is a sparse linear model. Designs and coefficients follow the reference setups of @rhdi, which earlier versions of simcity generated with `hdi::rXb()`. We fit the lasso with `glmnet::cv.glmnet` at `lambda.1se`, and then check whether the estimated model has a property we call **screening**. Writing $S = \{j : \beta_j \neq 0\}$ and $\hat S = \{j : \hat\beta_j \neq 0\}$, screening means $S \subseteq \hat S$: the selected variables include all the ones with nonzero coefficients in the true model.
 
 ```{r setup}
 library(ggplot2)
@@ -50,7 +50,7 @@ one_lasso_fit <- instance_hdr(n, p, s0)
 head(one_lasso_fit)
 ```
 
-The first row is the intercept. Its true value is 0, and it is not penalized or counted as a selected variable. Dropping it, which coefficients are nonzero in the true model? `hdi::rXb()` always puts the true support first. With the default `permuted = TRUE`, it instead shuffles the columns of $X$, so the active variables are not neighbours in the Toeplitz correlation structure.
+The first row is the intercept. Its true value is 0, and it is not penalized or counted as a selected variable. Dropping it, which coefficients are nonzero in the true model? `instance_hdr()` always puts the true support first. With the default `permuted = TRUE`, it instead shuffles the columns of $X$, so the active variables are not neighbours in the Toeplitz correlation structure.
 
 ```{r}
 slopes <- one_lasso_fit[one_lasso_fit$term != "(Intercept)", ]

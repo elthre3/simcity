@@ -27,10 +27,19 @@ instance_hdr(
 
 \item{s0}{Sparsity, the number of nonzero coefficients in the true model.}
 
-\item{xtype, btype, permuted}{Design and coefficient generation parameters,
-passed to \code{\link[hdi:rXb]{hdi::rXb()}}.}
+\item{xtype}{Design covariance \eqn{\Sigma}. \code{"toeplitz"}:
+\eqn{\Sigma_{jk} = \rho^{|j-k|}}. \code{"equi.corr"}: \eqn{\Sigma_{jk} = \rho}
+for \eqn{j \neq k} with unit diagonal. \code{"exp.decay"}: \eqn{\Sigma = K^{-1}}
+with \eqn{K_{jk} = a^{|j-k|/b}}.}
 
-\item{x.par}{Parameter of the design covariance, passed to \code{\link[hdi:rXb]{hdi::rXb()}}.
+\item{btype}{Distribution of the nonzero coefficients: \code{"U[a,b]"} for
+i.i.d. uniform on \eqn{[a, b]}, or \code{"bfixc"} for all equal to \code{c}
+(e.g. \code{"bfix1"}).}
+
+\item{permuted}{If \code{TRUE}, randomly permute the columns of \code{x}.}
+
+\item{x.par}{Parameter of the design covariance: \eqn{\rho} for
+\code{"toeplitz"} and \code{"equi.corr"}, \code{c(a, b)} for \code{"exp.decay"}.
 \code{NULL} (default) uses \code{1/3} for \code{"toeplitz"}, \code{1/20} for \code{"equi.corr"},
 and \code{c(0.4, 5)} for \code{"exp.decay"}.}
 
@@ -59,9 +68,11 @@ performance summaries.
 \details{
 The pipeline is:
 \enumerate{
-\item Generate a design matrix \code{x} and coefficient vector \code{beta} with
-\code{\link[hdi:rXb]{hdi::rXb()}}. The support of \code{beta} is always the first \code{s0}
-coordinates; \code{permuted = TRUE} randomly permutes the \emph{columns of \code{x}},
+\item Generate a design matrix \code{x} with i.i.d. \eqn{N_p(0, \Sigma)} rows
+and a coefficient vector \code{beta}, following the reference designs of
+Dezeure et al. (2015), formerly generated with \code{hdi::rXb()}. The
+support of \code{beta} is always the first \code{s0} coordinates;
+\code{permuted = TRUE} randomly permutes the \emph{columns of \code{x}},
 so that the active variables are not adjacent in the correlation
 structure.
 \item \verb{y <- yfun(x, beta, <yargs>)}
@@ -86,6 +97,11 @@ fit <- instance_hdr(50, 100, 5,
                     yargs = list(sigma = 2),
                     fitargs = list(alpha = 0),
                     postargs = list(s = "lambda.min"))
+}
+\references{
+Dezeure, R., Bühlmann, P., Meier, L. and Meinshausen, N.
+(2015). High-dimensional inference: confidence intervals, p-values and
+R-software hdi. \emph{Statistical Science}, 30(4), 533--558.
 }
 \seealso{
 \code{\link[=simulate_hdr]{simulate_hdr()}} to repeat this many times in parallel, and

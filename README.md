@@ -28,7 +28,7 @@ one_lasso_fit <- instance_hdr(n, p, s0)
 head(one_lasso_fit)
 ```
 
-The above example generates one instance of simulated data with `hdi::rXb()`. It then fits a lasso with `glmnet::cv.glmnet()` and returns the true and estimated coefficients at `lambda.1se`.
+The above example generates one instance of simulated data: a Gaussian design with Toeplitz correlation and a sparse coefficient vector, following the reference designs of Dezeure et al. (2015). It then fits a lasso with `glmnet::cv.glmnet()` and returns the true and estimated coefficients at `lambda.1se`.
 
 `simulate_hdr()` repeats this many times, in parallel across `cores` worker processes. Each replication gets its own random number stream, so results depend on `seed` but not on the number of cores. `simmary_coefs()` computes support recovery and estimation metrics for each replication.
 

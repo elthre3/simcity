@@ -22,7 +22,7 @@ Imports:
     doRNG,
     foreach,
     glmnet,
-    hdi,
+    MASS,
     parallel,
     stats
 Suggests: 
