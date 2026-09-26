@@ -59,7 +59,19 @@ test_that("workers find packages on library paths set in the session", {
   skip_if_not(dir.exists(file.path(pkg_dir, "Meta")), "simcity not installed")
 
   # Child session where the libraries are set with .libPaths() only, not via
-  # environment variables that the workers would inherit.
+  # environment variables that the workers would inherit. The variables are
+  # unset here rather than with system2(env = ), which does not work for
+  # Rscript on Windows.
+  lib_vars <- c("R_LIBS", "R_LIBS_USER")
+  old_env <- Sys.getenv(lib_vars, unset = NA)
+  on.exit({
+    for (v in lib_vars) {
+      if (is.na(old_env[[v]])) Sys.unsetenv(v)
+      else do.call(Sys.setenv, stats::setNames(list(old_env[[v]]), v))
+    }
+  }, add = TRUE)
+  Sys.unsetenv(lib_vars)
+
   script <- tempfile(fileext = ".R")
   on.exit(unlink(script), add = TRUE)
   writeLines(c(
@@ -70,8 +82,11 @@ test_that("workers find packages on library paths set in the session", {
   ), script)
   out <- suppressWarnings(system2(
     file.path(R.home("bin"), "Rscript"), shQuote(script),
-    stdout = TRUE, stderr = TRUE,
-    env = c("R_LIBS=", "R_LIBS_USER=")
+    stdout = TRUE, stderr = TRUE
   ))
-  expect_true(any(grepl("iterations: 2", out)), info = paste(out, collapse = "\n"))
+  expect_true(
+    any(grepl("iterations: 2", out)),
+    info = paste(c(paste("exit status:", attr(out, "status")), out),
+                 collapse = "\n")
+  )
 })
