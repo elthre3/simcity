@@ -18,7 +18,8 @@
 #' Workers are separate R processes. Custom components that call functions
 #' from other packages should use `pkg::fun()`, or list those packages in
 #' `packages`. With `cores > 1`, simcity itself must be installed, not just
-#' loaded with `devtools::load_all()`.
+#' loaded with `devtools::load_all()`. Workers use the library paths of the
+#' calling session, [.libPaths()].
 #'
 #' @param niters Number of simulation iterations.
 #' @param n,p,s0 Sample size, number of predictors, and sparsity. See
@@ -71,6 +72,13 @@ simulate_hdr <- function(
   if (cores > 1L) {
     cl <- parallel::makeCluster(cores)
     on.exit(parallel::stopCluster(cl), add = TRUE)
+    # Workers start with the default library paths. If simcity or a package
+    # in `packages` was found via .libPaths() set in this session, workers
+    # could not load it, and instance_hdr() would not be found. Send a call
+    # rather than the .libPaths function itself: that closure keeps the paths
+    # in its own environment, so a serialized copy would not change the
+    # worker's library paths.
+    parallel::clusterCall(cl, eval, call(".libPaths", .libPaths()), globalenv())
     doParallel::registerDoParallel(cl)
   } else {
     foreach::registerDoSEQ()

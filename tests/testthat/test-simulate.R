@@ -52,3 +52,26 @@ test_that("parallel results match sequential results and clean up", {
   expect_equal(foreach::getDoParName(), "doSEQ")
   expect_equal(unlist(foreach::`%dopar%`(foreach::foreach(i = 1:2), i)), 1:2)
 })
+
+test_that("workers find packages on library paths set in the session", {
+  skip_on_cran()
+  pkg_dir <- find.package("simcity")
+  skip_if_not(dir.exists(file.path(pkg_dir, "Meta")), "simcity not installed")
+
+  # Child session where the libraries are set with .libPaths() only, not via
+  # environment variables that the workers would inherit.
+  script <- tempfile(fileext = ".R")
+  on.exit(unlink(script), add = TRUE)
+  writeLines(c(
+    sprintf(".libPaths(%s)",
+            paste(deparse(c(dirname(pkg_dir), .libPaths())), collapse = "")),
+    "sims <- simcity::simulate_hdr(2, 30, 20, 2, cores = 2, seed = 1)",
+    "cat('iterations:', length(sims))"
+  ), script)
+  out <- suppressWarnings(system2(
+    file.path(R.home("bin"), "Rscript"), shQuote(script),
+    stdout = TRUE, stderr = TRUE,
+    env = c("R_LIBS=", "R_LIBS_USER=")
+  ))
+  expect_true(any(grepl("iterations: 2", out)), info = paste(out, collapse = "\n"))
+})

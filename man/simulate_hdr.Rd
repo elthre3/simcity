@@ -59,7 +59,8 @@ so a backend you registered before the call is not restored.
 Workers are separate R processes. Custom components that call functions
 from other packages should use \code{pkg::fun()}, or list those packages in
 \code{packages}. With \code{cores > 1}, simcity itself must be installed, not just
-loaded with \code{devtools::load_all()}.
+loaded with \code{devtools::load_all()}. Workers use the library paths of the
+calling session, \code{\link[=.libPaths]{.libPaths()}}.
 }
 \examples{
 sims <- simulate_hdr(niters = 4, n = 50, p = 100, s0 = 5,

@@ -40,6 +40,10 @@
   breaking later `%dopar%` loops. The cluster also leaked if an iteration
   failed. With the default `cores`, a single-core machine requested a
   cluster of 0 workers.
+* With `cores > 1`, `simulate_hdr()` failed with "object 'instance_hdr' not
+  found" when simcity was installed in a library added with `.libPaths()`
+  rather than an environment variable, because workers did not see that
+  library. Workers now use the library paths of the calling session.
 * `yargs` or `postargs` lists without the expected field silently produced
   empty results.
 
